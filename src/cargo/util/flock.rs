@@ -437,23 +437,58 @@ mod sys {
     use std::os::unix::io::AsRawFd;
 
     pub(super) fn lock_shared(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_SH)
+        #[cfg(not(target_os = "solaris"))]
+        {
+            flock(file, libc::LOCK_SH)
+        }
+        #[cfg(target_os = "solaris")]
+        {
+            flock(file, 1)
+        }
     }
 
     pub(super) fn lock_exclusive(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_EX)
+        #[cfg(not(target_os = "solaris"))]
+        {
+            flock(file, libc::LOCK_EX)
+        }
+        #[cfg(target_os = "solaris")]
+        {
+            flock(file, 2)
+        }
     }
 
     pub(super) fn try_lock_shared(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_SH | libc::LOCK_NB)
+        #[cfg(not(target_os = "solaris"))]
+        {
+            flock(file, libc::LOCK_SH | libc::LOCK_NB)
+        }
+        #[cfg(target_os = "solaris")]
+        {
+            flock(file, 1 | 4)
+        }
     }
 
     pub(super) fn try_lock_exclusive(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_EX | libc::LOCK_NB)
+        #[cfg(not(target_os = "solaris"))]
+        {
+            flock(file, libc::LOCK_EX | libc::LOCK_NB)
+        }
+        #[cfg(target_os = "solaris")]
+        {
+            flock(file, 2 | 4)
+        }
     }
 
     pub(super) fn unlock(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_UN)
+        #[cfg(not(target_os = "solaris"))]
+        {
+            flock(file, libc::LOCK_UN)
+        }
+        #[cfg(target_os = "solaris")]
+        {
+            flock(file, 8)
+        }
     }
 
     pub(super) fn error_contended(err: &Error) -> bool {
@@ -493,18 +528,18 @@ mod sys {
             l_pid: 0,
             l_pad: [0, 0, 0, 0],
         };
-        flock.l_type = if flag & libc::LOCK_UN != 0 {
+        flock.l_type = if flag & 8 != 0 {
             libc::F_UNLCK
-        } else if flag & libc::LOCK_EX != 0 {
+        } else if flag & 2 != 0 {
             libc::F_WRLCK
-        } else if flag & libc::LOCK_SH != 0 {
+        } else if flag & 1 != 0 {
             libc::F_RDLCK
         } else {
             panic!("unexpected flock() operation")
         };
 
         let mut cmd = libc::F_SETLKW;
-        if (flag & libc::LOCK_NB) != 0 {
+        if (flag & 4) != 0 {
             cmd = libc::F_SETLK;
         }
 
